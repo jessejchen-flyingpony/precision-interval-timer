@@ -104,31 +104,44 @@ export class Beeper {
 
   private speak(text: string, volume: number) {
     if ('speechSynthesis' in window) {
-      // Browsers often have a "ducking" effect when multiple audio sources play.
-      // We explicitly cancel if the next message is critical, but we do it 
-      // with a slight check to avoid the Chrome 4-second delay bug.
-      if (window.speechSynthesis.speaking && text.includes('left')) {
+      // 1. Wake up the AudioContext immediately
+      this.init();
+
+      // 2. Play a silent 'wake-up' tone to ensure the browser's audio engine 
+      // isn't in a power-saving or ducked state for this tab.
+      if (this.audioCtx) {
+        const silentGain = this.audioCtx.createGain();
+        silentGain.gain.value = 0;
+        silentGain.connect(this.audioCtx.destination);
+        this.beep(440, 0.01, 'sine', silentGain, 0);
+      }
+
+      // 3. Handle overlapping speech
+      if (window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
       }
 
-      // Boost volume since TTS is much quieter than square wave oscillators
-      const effectiveVolume = Math.min(1.0, volume * 1.5);
+      // 4. Boost volume logic. Since it's still "extremely low", 
+      // let's ensure we use the maximum possible volume for the utterance.
+      const effectiveVolume = Math.min(1.0, volume * 2.0);
 
       this.currentUtterance = new SpeechSynthesisUtterance(text);
       this.currentUtterance.volume = effectiveVolume;
 
-      if (this.voice) {
-        this.currentUtterance.voice = this.voice;
-      } else {
-        const voices = window.speechSynthesis.getVoices();
-        this.currentUtterance.voice = voices.find(v => v.lang.startsWith('en') && v.localService) ||
-          voices.find(v => v.lang.startsWith('en')) || null;
+      // 5. Explicitly search for high-quality local voices (Microsoft/Apple local vs Google Cloud)
+      const voices = window.speechSynthesis.getVoices();
+      const bestVoice =
+        voices.find(v => v.lang.startsWith('en') && v.localService && (v.name.includes('David') || v.name.includes('Zira') || v.name.includes('Samantha'))) ||
+        voices.find(v => v.lang.startsWith('en') && v.localService) ||
+        voices.find(v => v.lang.startsWith('en')) || null;
+
+      if (bestVoice) {
+        this.currentUtterance.voice = bestVoice;
       }
 
       window.speechSynthesis.speak(this.currentUtterance);
     } else {
       console.warn("Speech Synthesis API not supported in this browser.");
-      // Fallback
       this.play('ding', volume);
     }
   }
