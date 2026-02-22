@@ -104,11 +104,18 @@ export class Beeper {
 
   private speak(text: string, volume: number) {
     if ('speechSynthesis' in window) {
-      // We do not call cancel() or setTimeout() here because in Chrome/Safari that
-      // can cause the TTS engine to stall for several seconds or drop the utterance.
+      // Browsers often have a "ducking" effect when multiple audio sources play.
+      // We explicitly cancel if the next message is critical, but we do it 
+      // with a slight check to avoid the Chrome 4-second delay bug.
+      if (window.speechSynthesis.speaking && text.includes('left')) {
+        window.speechSynthesis.cancel();
+      }
+
+      // Boost volume since TTS is much quieter than square wave oscillators
+      const effectiveVolume = Math.min(1.0, volume * 1.5);
 
       this.currentUtterance = new SpeechSynthesisUtterance(text);
-      this.currentUtterance.volume = volume;
+      this.currentUtterance.volume = effectiveVolume;
 
       if (this.voice) {
         this.currentUtterance.voice = this.voice;
