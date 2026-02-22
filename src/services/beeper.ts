@@ -1,7 +1,7 @@
 /**
  * Simple Web Audio Beeper with presets
  */
-export type SoundPreset = 'classic' | 'high' | 'low' | 'pulse' | 'digital' | 'ding' | 'alarm' | 'chime' | 'buzzer' | 'sonar';
+export type SoundPreset = 'classic' | 'high' | 'low' | 'pulse' | 'digital' | 'ding' | 'alarm' | 'chime' | 'buzzer' | 'sonar' | 'voice';
 
 export class Beeper {
   private audioCtx: AudioContext | null = null;
@@ -12,7 +12,12 @@ export class Beeper {
     }
   }
 
-  play(preset: SoundPreset = 'classic', globalVolume: number = 1.0) {
+  play(preset: SoundPreset = 'classic', globalVolume: number = 1.0, textToSpeak?: string) {
+    if (preset === 'voice') {
+      this.speak(textToSpeak || 'Voice alert', globalVolume);
+      return;
+    }
+
     this.init();
     if (!this.audioCtx) return;
 
@@ -78,6 +83,33 @@ export class Beeper {
 
     osc.start();
     osc.stop(this.audioCtx.currentTime + duration);
+  }
+
+  private speak(text: string, volume: number) {
+    if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      // Some browsers truncate the very first syllable, adding a comma/pause helps
+      const utterance = new SpeechSynthesisUtterance(`, ${text}`);
+      utterance.volume = volume;
+
+      // Try to find a clear English voice
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoice = voices.find(v => v.lang.startsWith('en') && !v.localService) ||
+        voices.find(v => v.lang.startsWith('en'));
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+
+      // utterance.rate = 1.0;
+      // utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      console.warn("Speech Synthesis API not supported in this browser.");
+      // Fallback
+      this.play('ding', volume);
+    }
   }
 }
 

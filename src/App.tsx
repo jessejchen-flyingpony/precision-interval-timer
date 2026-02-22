@@ -122,20 +122,33 @@ export default function App() {
 
       const intervalSeconds = alarm.intervalMinutes * 60;
       let triggered = false;
+      let textToSpeak = alarm.label || "Alert";
 
       if (alarm.type === 'interval') {
         if (secondsSinceMidnight % intervalSeconds === 0) {
           triggered = true;
+          textToSpeak = alarm.label || "Cycle complete";
         }
       } else if (alarm.type === 'mark') {
         const markSeconds = alarm.markSeconds || 0;
         if (secondsSinceMidnight % intervalSeconds === markSeconds) {
           triggered = true;
+
+          const secondsRemaining = intervalSeconds - markSeconds;
+          if (secondsRemaining >= 60) {
+            const m = Math.floor(secondsRemaining / 60);
+            const s = secondsRemaining % 60;
+            textToSpeak = s > 0
+              ? `${m} ${m === 1 ? 'minute' : 'minutes'} and ${s} ${s === 1 ? 'second' : 'seconds'} left`
+              : `${m} ${m === 1 ? 'minute' : 'minutes'} left`;
+          } else {
+            textToSpeak = `${secondsRemaining} ${secondsRemaining === 1 ? 'second' : 'seconds'} left`;
+          }
         }
       }
 
       if (triggered && !isMuted) {
-        beeper.play(alarm.sound, globalVolume);
+        beeper.play(alarm.sound, globalVolume, textToSpeak);
       }
     });
   };
@@ -199,7 +212,7 @@ export default function App() {
   };
 
   const testBeep = (sound?: SoundPreset) => {
-    beeper.play(sound || newSound, globalVolume);
+    beeper.play(sound || newSound, globalVolume, "Testing Voice Capability");
   };
 
   const handleShare = async () => {
@@ -400,6 +413,7 @@ export default function App() {
                     <option value="chime">✨ Chime</option>
                     <option value="buzzer">💢 Buzzer</option>
                     <option value="sonar">🌊 Sonar</option>
+                    <option value="voice">🗣️ Speech / Voice</option>
                   </select>
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-hardware-muted">
                     <Music className="w-4 h-4" />
