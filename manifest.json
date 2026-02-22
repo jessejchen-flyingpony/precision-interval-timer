@@ -1,0 +1,20 @@
+{
+  "short_name": "Timer",
+  "name": "Precision Interval Timer",
+  "icons": [
+    {
+      "src": "https://picsum.photos/id/175/192/192",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://picsum.photos/id/175/512/512",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#121212",
+  "background_color": "#121212"
+}
