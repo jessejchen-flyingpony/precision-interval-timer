@@ -6,6 +6,20 @@ export type SoundPreset = 'classic' | 'high' | 'low' | 'pulse' | 'digital' | 'di
 export class Beeper {
   private audioCtx: AudioContext | null = null;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private voice: SpeechSynthesisVoice | null = null;
+
+  constructor() {
+    // Preload voices
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const loadVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        this.voice = voices.find(v => v.lang.startsWith('en') && v.localService) ||
+          voices.find(v => v.lang.startsWith('en')) || null;
+      };
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }
 
   private init() {
     if (!this.audioCtx) {
@@ -88,26 +102,21 @@ export class Beeper {
 
   private speak(text: string, volume: number) {
     if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
+      // We do not call cancel() or setTimeout() here because in Chrome/Safari that
+      // can cause the TTS engine to stall for several seconds or drop the utterance.
 
-      // Delay to let the Speech API reset properly; prevents progressive truncation bugs
-      setTimeout(() => {
-        this.currentUtterance = new SpeechSynthesisUtterance(text);
-        this.currentUtterance.volume = volume;
+      this.currentUtterance = new SpeechSynthesisUtterance(text);
+      this.currentUtterance.volume = volume;
 
-        // Try to find a clear English voice - PREFER LOCAL voices to avoid network latency/truncation
+      if (this.voice) {
+        this.currentUtterance.voice = this.voice;
+      } else {
         const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith('en') && v.localService) ||
-          voices.find(v => v.lang.startsWith('en'));
-        if (englishVoice) {
-          this.currentUtterance.voice = englishVoice;
-        }
+        this.currentUtterance.voice = voices.find(v => v.lang.startsWith('en') && v.localService) ||
+          voices.find(v => v.lang.startsWith('en')) || null;
+      }
 
-        // utterance.rate = 1.0;
-        // utterance.pitch = 1.0;
-        window.speechSynthesis.speak(this.currentUtterance);
-      }, 50);
+      window.speechSynthesis.speak(this.currentUtterance);
     } else {
       console.warn("Speech Synthesis API not supported in this browser.");
       // Fallback
