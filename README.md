@@ -7,11 +7,13 @@ A professional-grade, hardware-inspired interval timer and alarm clock built wit
 ## 🚀 Features
 
 - **Hardware Aesthetic**: Matrix-green LCD display with a dark, professional theme.
-- **Precise Timing**: Trigger beeps at exact intervals or specific marks within a cycle (e.g., at 4m 25s of every 5m cycle).
-- **Sound Profiles**: Multiple high-quality sound presets including "Classic Square", "Loud Ding", and "Loud Alarm".
-- **Persistence**: Your rules are automatically saved to your browser's local storage.
-- **PWA Support**: Installable as a standalone desktop application.
-- **Responsive Design**: Works perfectly on desktop and mobile browsers.
+- **🗣️ Intelligent Voice Alerts**: Natural language announcements for cycle marks (e.g., "1 minute 30 seconds left") and custom labels using Web Speech API.
+- **🔊 Global Volume Control**: Persistent volume slider in the header to regulate all beeps and speech alerts.
+- **🔄 Background Reliability**: Advanced "Catch-Up" logic that processes missed seconds if the browser throttles the tab, ensuring alarms never fail.
+- **🎶 Expanded Sound Profiles**: High-quality presets including Chime, Buzzer, Sonar, Classic Square, and Alarm.
+- **💾 Persistence**: Automatically saves your rules and volume settings to local storage.
+- **🚀 Automated Deployment**: Integrated GitHub Actions for seamless deployment to GitHub Pages.
+- **📱 Responsive & Installable**: Works on all devices and supports PWA installation.
 
 ## 🛠️ Tech Stack
 
