@@ -1,7 +1,7 @@
 /**
  * Simple Web Audio Beeper with presets
  */
-export type SoundPreset = 'classic' | 'high' | 'low' | 'pulse' | 'digital' | 'ding' | 'alarm';
+export type SoundPreset = 'classic' | 'high' | 'low' | 'pulse' | 'digital' | 'ding' | 'alarm' | 'chime' | 'buzzer' | 'sonar';
 
 export class Beeper {
   private audioCtx: AudioContext | null = null;
@@ -12,11 +12,13 @@ export class Beeper {
     }
   }
 
-  play(preset: SoundPreset = 'classic') {
+  play(preset: SoundPreset = 'classic', globalVolume: number = 1.0) {
     this.init();
     if (!this.audioCtx) return;
 
     const gainNode = this.audioCtx.createGain();
+    // Scale the overall output by the globalVolume parameter
+    gainNode.gain.value = globalVolume;
     gainNode.connect(this.audioCtx.destination);
 
     switch (preset) {
@@ -42,6 +44,17 @@ export class Beeper {
       case 'digital':
         this.beep(1200, 0.15, 'triangle', gainNode);
         break;
+      case 'chime':
+        this.beep(1046.50, 0.4, 'sine', gainNode, 0.2); // C6
+        setTimeout(() => this.beep(1318.51, 0.6, 'sine', gainNode, 0.2), 200); // E6
+        break;
+      case 'buzzer':
+        this.beep(150, 0.3, 'sawtooth', gainNode, 0.3);
+        setTimeout(() => this.beep(150, 0.4, 'sawtooth', gainNode, 0.3), 350);
+        break;
+      case 'sonar':
+        this.beep(1200, 1.5, 'sine', gainNode, 0.3);
+        break;
       case 'classic':
       default:
         this.beep(880, 0.15, 'square', gainNode);
@@ -53,16 +66,16 @@ export class Beeper {
     if (!this.audioCtx) return;
     const osc = this.audioCtx.createOscillator();
     const g = this.audioCtx.createGain();
-    
+
     osc.type = type;
     osc.frequency.setValueAtTime(freq, this.audioCtx.currentTime);
-    
+
     g.gain.setValueAtTime(volume, this.audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.00001, this.audioCtx.currentTime + duration);
-    
+
     osc.connect(g);
     g.connect(gainNode);
-    
+
     osc.start();
     osc.stop(this.audioCtx.currentTime + duration);
   }

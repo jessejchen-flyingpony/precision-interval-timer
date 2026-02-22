@@ -34,14 +34,46 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  
-  // Form state
+
   const [newType, setNewType] = useState<AlarmType>('interval');
   const [newInterval, setNewInterval] = useState(5);
   const [newMarkMins, setNewMarkMins] = useState(4);
   const [newMarkSecs, setNewMarkSecs] = useState(0);
   const [newLabel, setNewLabel] = useState('');
   const [newSound, setNewSound] = useState<SoundPreset>('classic');
+  const [globalVolume, setGlobalVolume] = useState(1.0);
+
+  const SETTINGS_STORAGE_KEY = 'precision_timer_form_settings';
+
+  // Load form settings on mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed.newType) setNewType(parsed.newType);
+        if (parsed.newInterval) setNewInterval(parsed.newInterval);
+        if (parsed.newMarkMins !== undefined) setNewMarkMins(parsed.newMarkMins);
+        if (parsed.newMarkSecs !== undefined) setNewMarkSecs(parsed.newMarkSecs);
+        if (parsed.newSound) setNewSound(parsed.newSound);
+        if (parsed.globalVolume !== undefined) setGlobalVolume(parsed.globalVolume);
+      } catch (e) {
+        console.error("Failed to load form settings", e);
+      }
+    }
+  }, []);
+
+  // Save form settings when they change
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
+      newType,
+      newInterval,
+      newMarkMins,
+      newMarkSecs,
+      newSound,
+      globalVolume
+    }));
+  }, [newType, newInterval, newMarkMins, newMarkSecs, newSound, globalVolume]);
 
   const lastTriggeredSecond = useRef<number>(-1);
 
@@ -73,12 +105,12 @@ export default function App() {
     }, 100);
 
     return () => clearInterval(timer);
-  }, [alarms, isMuted]);
+  }, [alarms, isMuted, globalVolume]);
 
   const checkAlarms = (now: Date) => {
     const currentSecond = Math.floor(now.getTime() / 1000);
     if (currentSecond === lastTriggeredSecond.current) return;
-    
+
     lastTriggeredSecond.current = currentSecond;
 
     const midnight = new Date(now);
@@ -90,7 +122,7 @@ export default function App() {
 
       const intervalSeconds = alarm.intervalMinutes * 60;
       let triggered = false;
-      
+
       if (alarm.type === 'interval') {
         if (secondsSinceMidnight % intervalSeconds === 0) {
           triggered = true;
@@ -103,7 +135,7 @@ export default function App() {
       }
 
       if (triggered && !isMuted) {
-        beeper.play(alarm.sound);
+        beeper.play(alarm.sound, globalVolume);
       }
     });
   };
@@ -114,7 +146,7 @@ export default function App() {
     midnight.setHours(0, 0, 0, 0);
     const secondsSinceMidnight = Math.floor((now.getTime() - midnight.getTime()) / 1000);
     const intervalSeconds = alarm.intervalMinutes * 60;
-    
+
     let secondsToWait = 0;
     if (alarm.type === 'interval') {
       secondsToWait = intervalSeconds - (secondsSinceMidnight % intervalSeconds);
@@ -122,7 +154,7 @@ export default function App() {
     } else {
       const markSeconds = alarm.markSeconds || 0;
       const currentPosInCycle = secondsSinceMidnight % intervalSeconds;
-      
+
       if (currentPosInCycle < markSeconds) {
         secondsToWait = markSeconds - currentPosInCycle;
       } else {
@@ -145,7 +177,7 @@ export default function App() {
       intervalMinutes: preset?.intervalMinutes || newInterval,
       markSeconds: (preset?.type === 'mark' || (!preset && newType === 'mark')) ? markSecs : undefined,
       enabled: true,
-      label: preset?.label || newLabel || (newType === 'interval' ? `Every ${newInterval}m` : `At ${Math.floor(markSecs/60)}m ${markSecs%60}s of ${newInterval}m cycle`),
+      label: preset?.label || newLabel || (newType === 'interval' ? `Every ${newInterval}m` : `At ${Math.floor(markSecs / 60)}m ${markSecs % 60}s of ${newInterval}m cycle`),
       sound: preset?.sound || newSound
     };
     setAlarms([...alarms, newAlarm]);
@@ -167,7 +199,7 @@ export default function App() {
   };
 
   const testBeep = (sound?: SoundPreset) => {
-    beeper.play(sound || newSound);
+    beeper.play(sound || newSound, globalVolume);
   };
 
   const handleShare = async () => {
@@ -197,28 +229,44 @@ export default function App() {
           <h1 className="text-xl font-bold tracking-tight uppercase">Precision Timer</h1>
         </div>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleShare}
             className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full border border-hardware-border text-hardware-muted hover:text-hardware-accent hover:border-hardware-accent transition-all text-xs font-bold uppercase tracking-wider"
           >
             <Share2 className="w-4 h-4" />
             Share
           </button>
-          <button 
+          <button
             onClick={() => setShowInstallGuide(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-full border border-hardware-border text-hardware-muted hover:text-hardware-accent hover:border-hardware-accent transition-all text-xs font-bold uppercase tracking-wider"
           >
             <Monitor className="w-4 h-4" />
             Web App
           </button>
-          <button 
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border border-hardware-border bg-hardware-card">
+            <Volume2 className="w-4 h-4 text-hardware-muted" />
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={globalVolume}
+              onChange={(e) => {
+                setGlobalVolume(parseFloat(e.target.value));
+                if (parseFloat(e.target.value) > 0 && isMuted) setIsMuted(false);
+              }}
+              className="w-24 accent-hardware-accent cursor-pointer"
+              title="Global Volume"
+            />
+          </div>
+          <button
             onClick={() => testBeep()}
             className="p-3 rounded-full border border-hardware-border text-hardware-muted hover:text-hardware-accent hover:border-hardware-accent transition-all"
             title="Test Current Sound"
           >
             <Volume2 className="w-5 h-5" />
           </button>
-          <button 
+          <button
             onClick={() => setIsMuted(!isMuted)}
             className={cn(
               "p-3 rounded-full transition-all border",
@@ -233,7 +281,7 @@ export default function App() {
       {showInstallGuide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-hardware-card border border-hardware-border rounded-3xl p-8 max-w-md w-full relative shadow-2xl">
-            <button 
+            <button
               onClick={() => setShowInstallGuide(false)}
               className="absolute top-4 right-4 p-2 text-hardware-muted hover:text-white transition-colors"
             >
@@ -260,7 +308,7 @@ export default function App() {
                 <p className="text-hardware-muted font-bold uppercase text-[10px] tracking-widest">Option 3: GitHub Upload</p>
                 <p>To host this on GitHub, create a new repository and push the source code. You can then use <strong>GitHub Pages</strong> to host the web app for free.</p>
               </div>
-              <button 
+              <button
                 onClick={() => setShowInstallGuide(false)}
                 className="w-full bg-hardware-accent text-hardware-bg font-bold py-3 rounded-xl mt-4"
               >
@@ -285,7 +333,7 @@ export default function App() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <button 
+            <button
               onClick={() => addAlarm({ type: 'interval', intervalMinutes: 5, label: '5m Exact Mark', sound: 'ding' })}
               className="bg-hardware-card border border-hardware-border hover:border-hardware-accent p-4 rounded-xl text-left transition-all group"
             >
@@ -293,7 +341,7 @@ export default function App() {
               <div className="text-sm font-bold group-hover:text-hardware-accent">5m Interval</div>
               <div className="text-[10px] text-hardware-muted font-mono mt-1">:00, :05, :10...</div>
             </button>
-            <button 
+            <button
               onClick={() => addAlarm({ type: 'mark', intervalMinutes: 5, markSeconds: 4 * 60, label: '5m Warning Mark', sound: 'pulse' })}
               className="bg-hardware-card border border-hardware-border hover:border-hardware-accent p-4 rounded-xl text-left transition-all group"
             >
@@ -313,7 +361,7 @@ export default function App() {
               <div className="space-y-2">
                 <label className="text-[10px] uppercase font-bold text-hardware-muted tracking-widest">Trigger Type</label>
                 <div className="flex bg-hardware-bg p-1 rounded-lg border border-hardware-border">
-                  <button 
+                  <button
                     onClick={() => setNewType('interval')}
                     className={cn(
                       "flex-1 py-2 px-3 rounded text-xs font-medium transition-all",
@@ -322,7 +370,7 @@ export default function App() {
                   >
                     Interval
                   </button>
-                  <button 
+                  <button
                     onClick={() => setNewType('mark')}
                     className={cn(
                       "flex-1 py-2 px-3 rounded text-xs font-medium transition-all",
@@ -337,7 +385,7 @@ export default function App() {
               <div className="space-y-2">
                 <label className="text-[10px] uppercase font-bold text-hardware-muted tracking-widest">Sound Profile</label>
                 <div className="relative">
-                  <select 
+                  <select
                     value={newSound}
                     onChange={(e) => setNewSound(e.target.value as SoundPreset)}
                     className="w-full bg-hardware-bg border border-hardware-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-hardware-accent appearance-none"
@@ -349,6 +397,9 @@ export default function App() {
                     <option value="low">Low Sine</option>
                     <option value="pulse">Double Pulse</option>
                     <option value="digital">Digital Triangle</option>
+                    <option value="chime">✨ Chime</option>
+                    <option value="buzzer">💢 Buzzer</option>
+                    <option value="sonar">🌊 Sonar</option>
                   </select>
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-hardware-muted">
                     <Music className="w-4 h-4" />
@@ -359,7 +410,7 @@ export default function App() {
 
             <div className="space-y-2">
               <label className="text-[10px] uppercase font-bold text-hardware-muted tracking-widest">Label (Optional)</label>
-              <input 
+              <input
                 type="text"
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
@@ -374,7 +425,7 @@ export default function App() {
                   {newType === 'interval' ? 'Every X Minutes' : 'Cycle Duration (Minutes)'}
                 </label>
                 <div className="flex items-center gap-3">
-                  <input 
+                  <input
                     type="range"
                     min="1"
                     max="60"
@@ -391,7 +442,7 @@ export default function App() {
                   <label className="text-[10px] uppercase font-bold text-hardware-muted tracking-widest">Trigger at Mark</label>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-2">
-                      <input 
+                      <input
                         type="number"
                         min="0"
                         max={newInterval - 1}
@@ -402,7 +453,7 @@ export default function App() {
                       <span className="text-[10px] text-hardware-muted uppercase">Min</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <input 
+                      <input
                         type="number"
                         min="0"
                         max="59"
@@ -417,7 +468,7 @@ export default function App() {
               )}
             </div>
 
-            <button 
+            <button
               onClick={() => addAlarm()}
               className="w-full bg-hardware-accent hover:bg-hardware-accent/90 text-hardware-bg font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98]"
             >
@@ -434,7 +485,7 @@ export default function App() {
               <h2 className="text-xs font-bold uppercase tracking-widest text-hardware-muted">Active Rules</h2>
             </div>
             <div className="flex items-center gap-3">
-              <button 
+              <button
                 onClick={clearAll}
                 className="text-[10px] font-bold text-red-500/70 hover:text-red-500 uppercase tracking-wider transition-colors"
               >
@@ -456,7 +507,7 @@ export default function App() {
               </div>
             ) : (
               alarms.map((alarm) => (
-                <div 
+                <div
                   key={alarm.id}
                   className={cn(
                     "group relative bg-hardware-card border rounded-xl p-4 transition-all hover:border-hardware-accent/50",
@@ -471,7 +522,7 @@ export default function App() {
                           {alarm.type === 'interval' ? 'RECURRING' : 'MARK'}
                         </span>
                         <span className="text-[10px] text-hardware-muted font-mono uppercase">
-                          {alarm.type === 'interval' ? `Every ${alarm.intervalMinutes}m` : `At ${Math.floor((alarm.markSeconds||0)/60)}m ${(alarm.markSeconds||0)%60}s of ${alarm.intervalMinutes}m`}
+                          {alarm.type === 'interval' ? `Every ${alarm.intervalMinutes}m` : `At ${Math.floor((alarm.markSeconds || 0) / 60)}m ${(alarm.markSeconds || 0) % 60}s of ${alarm.intervalMinutes}m`}
                         </span>
                         <span className="text-[9px] text-hardware-muted flex items-center gap-1">
                           <Music className="w-2 h-2" /> {alarm.sound}
@@ -483,7 +534,7 @@ export default function App() {
                         <span className="text-[9px] text-hardware-muted uppercase font-bold">Next</span>
                         <span className="text-xs font-mono text-hardware-accent">{alarm.enabled ? getNextTrigger(alarm) : '--:--'}</span>
                       </div>
-                      <button 
+                      <button
                         onClick={() => toggleAlarm(alarm.id)}
                         className={cn(
                           "p-2 rounded-lg transition-colors",
@@ -492,7 +543,7 @@ export default function App() {
                       >
                         {alarm.enabled ? <Play className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                       </button>
-                      <button 
+                      <button
                         onClick={() => removeAlarm(alarm.id)}
                         className="p-2 text-hardware-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                       >
