@@ -109,48 +109,57 @@ export default function App() {
 
   const checkAlarms = (now: Date) => {
     const currentSecond = Math.floor(now.getTime() / 1000);
-    if (currentSecond === lastTriggeredSecond.current) return;
+    if (lastTriggeredSecond.current === -1) {
+      lastTriggeredSecond.current = currentSecond;
+      return;
+    }
 
-    lastTriggeredSecond.current = currentSecond;
+    if (currentSecond === lastTriggeredSecond.current) return;
 
     const midnight = new Date(now);
     midnight.setHours(0, 0, 0, 0);
     const secondsSinceMidnight = Math.floor((now.getTime() - midnight.getTime()) / 1000);
+    const lastSecondsSinceMidnight = secondsSinceMidnight - (currentSecond - lastTriggeredSecond.current);
 
-    alarms.forEach(alarm => {
-      if (!alarm.enabled) return;
+    lastTriggeredSecond.current = currentSecond;
 
-      const intervalSeconds = alarm.intervalMinutes * 60;
-      let triggered = false;
-      let textToSpeak = alarm.label || "Alert";
+    // Check all seconds between the last check and now to handle dropped ticks during aggressive browser throttling
+    for (let s = lastSecondsSinceMidnight + 1; s <= secondsSinceMidnight; s++) {
+      alarms.forEach(alarm => {
+        if (!alarm.enabled) return;
 
-      if (alarm.type === 'interval') {
-        if (secondsSinceMidnight % intervalSeconds === 0) {
-          triggered = true;
-          textToSpeak = alarm.label || "Cycle complete";
-        }
-      } else if (alarm.type === 'mark') {
-        const markSeconds = alarm.markSeconds || 0;
-        if (secondsSinceMidnight % intervalSeconds === markSeconds) {
-          triggered = true;
+        const intervalSeconds = alarm.intervalMinutes * 60;
+        let triggered = false;
+        let textToSpeak = alarm.label || "Alert";
 
-          const secondsRemaining = intervalSeconds - markSeconds;
-          if (secondsRemaining >= 60) {
-            const m = Math.floor(secondsRemaining / 60);
-            const s = secondsRemaining % 60;
-            textToSpeak = s > 0
-              ? `${m} ${m === 1 ? 'minute' : 'minutes'} and ${s} ${s === 1 ? 'second' : 'seconds'} left`
-              : `${m} ${m === 1 ? 'minute' : 'minutes'} left`;
-          } else {
-            textToSpeak = `${secondsRemaining} ${secondsRemaining === 1 ? 'second' : 'seconds'} left`;
+        if (alarm.type === 'interval') {
+          if (s % intervalSeconds === 0) {
+            triggered = true;
+            textToSpeak = alarm.label || "Cycle complete";
+          }
+        } else if (alarm.type === 'mark') {
+          const markSeconds = alarm.markSeconds || 0;
+          if (s % intervalSeconds === markSeconds) {
+            triggered = true;
+
+            const secondsRemaining = intervalSeconds - markSeconds;
+            if (secondsRemaining >= 60) {
+              const m = Math.floor(secondsRemaining / 60);
+              const sec = secondsRemaining % 60;
+              textToSpeak = sec > 0
+                ? `${m} ${m === 1 ? 'minute' : 'minutes'} and ${sec} ${sec === 1 ? 'second' : 'seconds'} left`
+                : `${m} ${m === 1 ? 'minute' : 'minutes'} left`;
+            } else {
+              textToSpeak = `${secondsRemaining} ${secondsRemaining === 1 ? 'second' : 'seconds'} left`;
+            }
           }
         }
-      }
 
-      if (triggered && !isMuted) {
-        beeper.play(alarm.sound, globalVolume, textToSpeak);
-      }
-    });
+        if (triggered && !isMuted) {
+          beeper.play(alarm.sound, globalVolume, textToSpeak);
+        }
+      });
+    }
   };
 
   const getNextTrigger = (alarm: AlarmRule) => {

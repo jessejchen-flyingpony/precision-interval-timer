@@ -24,6 +24,8 @@ export class Beeper {
   private init() {
     if (!this.audioCtx) {
       this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    } else if (this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume();
     }
   }
 
