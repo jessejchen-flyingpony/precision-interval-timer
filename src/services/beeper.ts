@@ -93,13 +93,12 @@ export class Beeper {
 
       // Delay to let the Speech API reset properly; prevents progressive truncation bugs
       setTimeout(() => {
-        // Some browsers truncate the very first syllable, adding a comma/pause helps
-        this.currentUtterance = new SpeechSynthesisUtterance(`, ${text}`);
+        this.currentUtterance = new SpeechSynthesisUtterance(text);
         this.currentUtterance.volume = volume;
 
-        // Try to find a clear English voice
+        // Try to find a clear English voice - PREFER LOCAL voices to avoid network latency/truncation
         const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith('en') && !v.localService) ||
+        const englishVoice = voices.find(v => v.lang.startsWith('en') && v.localService) ||
           voices.find(v => v.lang.startsWith('en'));
         if (englishVoice) {
           this.currentUtterance.voice = englishVoice;
