@@ -14,6 +14,17 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function numToWords(n: number): string {
+  const ones = ['zero','one','two','three','four','five','six','seven','eight','nine',
+                 'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen',
+                 'seventeen','eighteen','nineteen'];
+  const tens = ['','','twenty','thirty','forty','fifty'];
+  if (n < 20) return ones[n];
+  const t = Math.floor(n / 10);
+  const o = n % 10;
+  return o === 0 ? tens[t] : `${tens[t]}-${ones[o]}`;
+}
+
 type AlarmType = 'interval' | 'mark';
 
 interface AlarmRule {
@@ -42,6 +53,8 @@ export default function App() {
   const [newLabel, setNewLabel] = useState('');
   const [newSound, setNewSound] = useState<SoundPreset>('classic');
   const [globalVolume, setGlobalVolume] = useState(1.0);
+  const [popUpOnAlarm, setPopUpOnAlarm] = useState(true);
+  const isElectron = typeof (window as any).electronAPI !== 'undefined';
 
   const SETTINGS_STORAGE_KEY = 'precision_timer_form_settings';
 
@@ -57,6 +70,7 @@ export default function App() {
         if (parsed.newMarkSecs !== undefined) setNewMarkSecs(parsed.newMarkSecs);
         if (parsed.newSound) setNewSound(parsed.newSound);
         if (parsed.globalVolume !== undefined) setGlobalVolume(parsed.globalVolume);
+        if (parsed.popUpOnAlarm !== undefined) setPopUpOnAlarm(parsed.popUpOnAlarm);
       } catch (e) {
         console.error("Failed to load form settings", e);
       }
@@ -71,9 +85,10 @@ export default function App() {
       newMarkMins,
       newMarkSecs,
       newSound,
-      globalVolume
+      globalVolume,
+      popUpOnAlarm
     }));
-  }, [newType, newInterval, newMarkMins, newMarkSecs, newSound, globalVolume]);
+  }, [newType, newInterval, newMarkMins, newMarkSecs, newSound, globalVolume, popUpOnAlarm]);
 
   const lastTriggeredSecond = useRef<number>(-1);
 
@@ -119,7 +134,14 @@ export default function App() {
     const midnight = new Date(now);
     midnight.setHours(0, 0, 0, 0);
     const secondsSinceMidnight = Math.floor((now.getTime() - midnight.getTime()) / 1000);
-    const lastSecondsSinceMidnight = secondsSinceMidnight - (currentSecond - lastTriggeredSecond.current);
+
+    // Cap catch-up to 10 s. A gap larger than that means the tab was frozen
+    // (keepalive wasn't active yet, or the browser overrode it). Processing
+    // very old seconds causes alarms to fire at visually confusing times —
+    // e.g. a missed :30 mark triggering while the clock shows :17.
+    const MAX_CATCHUP_SECONDS = 10;
+    const elapsed = currentSecond - lastTriggeredSecond.current;
+    const lastSecondsSinceMidnight = secondsSinceMidnight - Math.min(elapsed, MAX_CATCHUP_SECONDS);
 
     lastTriggeredSecond.current = currentSecond;
 
@@ -147,16 +169,17 @@ export default function App() {
               const m = Math.floor(secondsRemaining / 60);
               const sec = secondsRemaining % 60;
               textToSpeak = sec > 0
-                ? `${m} ${m === 1 ? 'minute' : 'minutes'} and ${sec} ${sec === 1 ? 'second' : 'seconds'} left`
-                : `${m} ${m === 1 ? 'minute' : 'minutes'} left`;
+                ? `${numToWords(m)} ${m === 1 ? 'minute' : 'minutes'} and ${numToWords(sec)} ${sec === 1 ? 'second' : 'seconds'} left`
+                : `${numToWords(m)} ${m === 1 ? 'minute' : 'minutes'} left`;
             } else {
-              textToSpeak = `${secondsRemaining} ${secondsRemaining === 1 ? 'second' : 'seconds'} left`;
+              textToSpeak = `${numToWords(secondsRemaining)} ${secondsRemaining === 1 ? 'second' : 'seconds'} left`;
             }
           }
         }
 
         if (triggered && !isMuted) {
           beeper.play(alarm.sound, globalVolume, textToSpeak);
+          if (popUpOnAlarm) (window as any).electronAPI?.alarmTriggered();
         }
       });
     }
@@ -281,6 +304,18 @@ export default function App() {
               title="Global Volume"
             />
           </div>
+          {isElectron && (
+            <button
+              onClick={() => setPopUpOnAlarm(!popUpOnAlarm)}
+              className={cn(
+                "p-3 rounded-full transition-all border",
+                popUpOnAlarm ? "border-hardware-accent text-hardware-accent bg-hardware-accent/10" : "border-hardware-border text-hardware-muted hover:text-hardware-accent hover:border-hardware-accent"
+              )}
+              title={popUpOnAlarm ? "Pop-up on alarm: ON" : "Pop-up on alarm: OFF"}
+            >
+              <Monitor className="w-5 h-5" />
+            </button>
+          )}
           <button
             onClick={() => testBeep()}
             className="p-3 rounded-full border border-hardware-border text-hardware-muted hover:text-hardware-accent hover:border-hardware-accent transition-all"
